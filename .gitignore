@@ -1,0 +1,5 @@
+.idea/
+node_modules/
+*.iml
+target/
+dependency-reduced-pom.xml
