@@ -1,25 +1,25 @@
 package com.indicators.models;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
-import java.util.Date;
+import javax.validation.constraints.NotNull;
+import java.time.Instant;
 
 public class TradingSession {
-    private final Date open;
-    private final Date close;
+    @NotNull
+    private final Instant open;
 
-    @JsonCreator
-    public TradingSession(@JsonProperty("open") Date open, @JsonProperty("close") Date close) {
+    @NotNull
+    private final Instant close;
+
+    public TradingSession(final Instant open, final Instant close) {
         this.open = open;
         this.close = close;
     }
 
-    public Date getOpen() {
+    public Instant getOpen() {
         return open;
     }
 
-    public Date getClose() {
+    public Instant getClose() {
         return close;
     }
 }

@@ -1,18 +1,15 @@
 package com.indicators.models;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonRootName;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
-import com.sun.istack.internal.NotNull;
 
+import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import java.math.BigDecimal;
-import java.util.Date;
+import java.time.Instant;
 
-@JsonRootName("quote")
 public class Quote {
-    @NotNull
     @JsonUnwrapped
+    @Valid
     private final Instrument instrument;
 
     @NotNull
@@ -28,18 +25,22 @@ public class Quote {
     private final int lastSize;
 
     @NotNull
-    private final Date sentAt;
+    private final Instant sentAt;
 
-    @JsonCreator
-    public Quote(@JsonProperty("marketCode") final String marketCode,
-                 @JsonProperty("securityCode") final String securityCode,
-                 @JsonProperty("bidPrice") final BigDecimal bidPrice,
-                 @JsonProperty("bidSize") int bidSize,
-                 @JsonProperty("askPrice") BigDecimal askPrice,
-                 @JsonProperty("askSize") int askSize,
-                 @JsonProperty("lastPrice") BigDecimal lastPrice,
-                 @JsonProperty("lastSize") int lastSize,
-                 @JsonProperty("sentAt") Date sentAt) {
+    private Quote() {
+        this.instrument = null;
+        this.bidPrice = null;
+        this.bidSize = 0;
+        this.askPrice = null;
+        this.askSize = 0;
+        this.lastPrice = null;
+        this.lastSize = 0;
+        this.sentAt = null;
+    }
+
+    public Quote(final String marketCode, final String securityCode, final BigDecimal bidPrice, final int bidSize,
+                 final BigDecimal askPrice, final int askSize, final BigDecimal lastPrice, final int lastSize,
+                 final Instant sentAt) {
         this.instrument = new Instrument(marketCode, securityCode);
         this.bidPrice = bidPrice;
         this.bidSize = bidSize;
@@ -78,7 +79,7 @@ public class Quote {
         return lastSize;
     }
 
-    public Date getSentAt() {
+    public Instant getSentAt() {
         return sentAt;
     }
 }

@@ -1,0 +1,4 @@
+1) Remove private null-initialized constructors, once the relevant Jackson issue is fixed.
+https://github.com/FasterXML/jackson-databind/issues/265
+
+2) @JsonProperty does not work with enums as expected, when findAndRegisterModulesIsUsed is called on ObjectMapper.

@@ -1,9 +1,13 @@
 package com.indicators.services;
 
-import com.indicators.decoders.InstrumentSubscriptionRequestDecoder;
-import com.indicators.encoders.JacksonEncoder;
-import com.indicators.models.InstrumentSubscriptionRequest;
-import com.indicators.models.ServerStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.indicators.models.*;
+import com.ning.http.client.AsyncHttpClient;
+import com.ning.http.client.AsyncHttpClientConfig;
+import com.ning.http.client.ws.WebSocket;
+import com.ning.http.client.ws.WebSocketTextListener;
+import com.ning.http.client.ws.WebSocketUpgradeHandler;
+import org.apache.commons.collections4.queue.CircularFifoQueue;
 import org.atmosphere.config.service.*;
 import org.atmosphere.cpr.*;
 import org.slf4j.Logger;
@@ -11,41 +15,30 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
-@ManagedService(path = "/macd/{marketCode: [a-zA-Z0-9]*}/{securityCode: [a-zA-Z0-9]*}")
+@Singleton
+@ManagedService(path = "/macd")
 public class MACDIndicator {
-    private final static String MACD = "/macd/";
+    private final static String MACD_PATH = "/macd";
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
-    @PathParam("marketCode")
-    private String marketCode;
-    @PathParam("securityCode")
-    private String securityCode;
-
+    private WebSocket webSocketClient;
     @Inject
     private BroadcasterFactory broadcasterFactory;
-
     @Inject
     private AtmosphereResourceFactory resourceFactory;
-
     @Inject
     private MetaBroadcaster metaBroadcaster;
+    @Inject
+    private ObjectMapper mapper;
+    private Map<Instrument, TrendCalculator> trendsMap = new HashMap<>();
+    private CircularFifoQueue<Trend> trendCache = new CircularFifoQueue<>(50);
 
-    private static Set<String> getInstruments(Collection<Broadcaster> broadcasters) {
-        Set<String> result = new HashSet<>();
-        broadcasters.stream().filter(broadcaster -> !("/*".equals(broadcaster.getID()))).forEach(broadcaster -> {
-            String[] p = broadcaster.getID().split("/");
-            result.add(p.length > 2 ? p[2] : "");
-        });
-        return result;
-    }
-
-    @Ready(encoders = {JacksonEncoder.class})
-    public ServerStatus onReady(final AtmosphereResource resource) {
+    @Ready
+    public void onReady(final AtmosphereResource resource) throws ExecutionException, InterruptedException {
         logger.info("Client {} connected.", resource.uuid());
-        return ServerStatus.CONNECTED;
     }
 
     @Disconnect
@@ -58,24 +51,68 @@ public class MACDIndicator {
         }
     }
 
-    @Message(encoders = {JacksonEncoder.class}, decoders = {InstrumentSubscriptionRequestDecoder.class})
-    @DeliverTo(DeliverTo.DELIVER_TO.RESOURCE)
-    public InstrumentSubscriptionRequest onMessage(final InstrumentSubscriptionRequest instrumentSubscriptionRequest)
-            throws IOException {
+    @Message
+    public void onMessage(final AtmosphereResource resource, final String instrumentSubscriptionRequest) throws ExecutionException, InterruptedException {
+        if (webSocketClient == null) {
+            AsyncHttpClientConfig clientConfig = new AsyncHttpClientConfig.Builder().setAcceptAnyCertificate(true).build();
+            webSocketClient = new AsyncHttpClient(clientConfig).prepareGet("wss://a.stealthtrader.com:7339/")
+                    .execute(new WebSocketUpgradeHandler.Builder().build()).get();
+            webSocketClient.addWebSocketListener(new WebSocketTextListener() {
+                @Override
+                public void onMessage(String response) {
+                    final ServerResponse serverResponse;
+                    final Broadcaster broadcaster = broadcasterFactory.lookup(MACD_PATH);
+                    try {
+                        serverResponse = mapper.readValue(response, ServerResponse.class);
+                        final Quote quote = serverResponse.getQuote();
+                        final ServerStatus serverStatus = serverResponse.getServerStatus();
+                        final SecurityInfo securityInfo = serverResponse.getSecurityInfo();
+                        if (quote != null) {
+                            final Instrument instrument = quote.getInstrument();
+                            final TrendCalculator trend = trendsMap.get(instrument);
+                            final HomogeneousFixedLengthTimeSeries timeSeries = trend.getTimeSeries();
+                            synchronized (timeSeries) {
+                                timeSeries.addQuote(quote);
+                                if (timeSeries.isFilled()) {
+                                    trendCache.add(trend.calculate());
+                                }
+                                broadcaster.broadcast(mapper.writeValueAsString(new IndicatorServerResponse(trendCache)));
+                            }
+                        } else if (securityInfo != null) {
+                            final Instrument instrument = securityInfo.getInstrument();
+                            trendsMap.put(instrument, new MACD(instrument));
+                        } else if (serverResponse.getError() != null) {
+                            resource.write(response);
+                        } else if (serverStatus != null) {
+                            if (serverStatus == ServerStatus.DISCONNECTED) {
+                                try {
+                                    resource.close();
+                                } catch (IOException ex) {
+                                    ex.printStackTrace();
+                                }
+                            }
+                            resource.write(response);
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
 
-        if (instrumentSubscriptionRequest.getSubscribe()) {
-            users.remove(instrumentSubscriptionRequest.getAuthor());
-            return new ChatProtocol(instrumentSubscriptionRequest.getAuthor(), " disconnected from room " + securityCode, users.keySet(), getInstruments(broadcasterFactory.lookupAll()));
+                @Override
+                public void onOpen(WebSocket webSocket) {
+
+                }
+
+                @Override
+                public void onClose(WebSocket webSocket) {
+
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                }
+            });
         }
-
-        if (!users.containsKey(instrumentSubscriptionRequest.getAuthor())) {
-            users.put(instrumentSubscriptionRequest.getAuthor(), instrumentSubscriptionRequest.getUuid());
-            return new ChatProtocol(instrumentSubscriptionRequest.getAuthor(), " entered room " + securityCode, users.keySet(), getInstruments(broadcasterFactory.lookupAll()));
-        }
-
-        instrumentSubscriptionRequest.setUsers(users.keySet());
-        logger.info("{} just send {}", instrumentSubscriptionRequest.getAuthor(), instrumentSubscriptionRequest.getMessage());
-        return new ChatProtocol(instrumentSubscriptionRequest.getAuthor(), instrumentSubscriptionRequest.getMessage(), users.keySet(), getInstruments(broadcasterFactory.lookupAll()));
+        webSocketClient.sendMessage(instrumentSubscriptionRequest);
     }
-
 }

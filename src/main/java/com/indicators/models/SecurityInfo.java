@@ -1,31 +1,47 @@
 package com.indicators.models;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonRootName;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
-import com.sun.istack.internal.NotNull;
 
-import java.util.List;
+import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
+import java.util.Collections;
+import java.util.Set;
 
-@JsonRootName(value = "securityInfo")
 public class SecurityInfo {
+    @Valid
     @NotNull
     @JsonUnwrapped
     private final Instrument instrument;
-    private final List<Tick> tickValues;
-    private final List<TradingHours> tradingHours;
+
+    @Valid
+    private final Set<Tick> tickValues;
+
+    @Valid
+    private final Set<TradingHours> tradingHours;
+
+    @Valid
     private final TradingSession tradingSession;
 
-    @JsonCreator
-    public SecurityInfo(@JsonProperty("marketCode") final String marketCode,
-                        @JsonProperty("securityCode") final String securityCode,
-                        @JsonProperty("tickValues") final List<Tick> tickValues,
-                        @JsonProperty("tradingHours") final List<TradingHours> tradingHours,
-                        @JsonProperty("tradingSession") final TradingSession tradingSession) {
+    private SecurityInfo() {
+        this.instrument = null;
+        this.tickValues = null;
+        this.tradingHours = null;
+        this.tradingSession = null;
+    }
+
+    public SecurityInfo(final String marketCode, final String securityCode, final Set<Tick> tickValues,
+                        final Set<TradingHours> tradingHours, final TradingSession tradingSession) {
         this.instrument = new Instrument(marketCode, securityCode);
-        this.tickValues = tickValues;
-        this.tradingHours = tradingHours;
+        if (tickValues == null) {
+            this.tickValues = Collections.emptySet();
+        } else {
+            this.tickValues = Collections.unmodifiableSet(tickValues);
+        }
+        if (tradingHours == null) {
+            this.tradingHours = Collections.emptySet();
+        } else {
+            this.tradingHours = Collections.unmodifiableSet(tradingHours);
+        }
         this.tradingSession = tradingSession;
     }
 
@@ -33,11 +49,11 @@ public class SecurityInfo {
         return instrument;
     }
 
-    public List<Tick> getTickValues() {
+    public Set<Tick> getTickValues() {
         return tickValues;
     }
 
-    public List<TradingHours> getTradingHours() {
+    public Set<TradingHours> getTradingHours() {
         return tradingHours;
     }
 

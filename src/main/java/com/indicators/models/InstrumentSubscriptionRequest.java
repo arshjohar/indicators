@@ -1,34 +1,30 @@
 package com.indicators.models;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
-import javax.validation.constraints.NotNull;
+import javax.validation.Valid;
 import java.util.Collections;
-import java.util.List;
+import java.util.Set;
 
 public class InstrumentSubscriptionRequest {
-    @NotNull
     private final String token;
-    @NotNull
-    private final List<Instrument> subscribe;
-    @NotNull
-    private final List<Instrument> unsubscribe;
 
-    @JsonCreator
-    public InstrumentSubscriptionRequest(@JsonProperty("token") final String token,
-                                         @JsonProperty("subscribe") final List<Instrument> subscribe,
-                                         @JsonProperty("unsubscribe") final List<Instrument> unsubscribe) {
+    @Valid
+    private final Set<Instrument> subscribe;
+
+    @Valid
+    private final Set<Instrument> unsubscribe;
+
+    public InstrumentSubscriptionRequest(final String token, final Set<Instrument> subscribe,
+                                         final Set<Instrument> unsubscribe) {
         this.token = token;
         if (subscribe == null) {
-            this.subscribe = Collections.emptyList();
+            this.subscribe = Collections.emptySet();
         } else {
-            this.subscribe = subscribe;
+            this.subscribe = Collections.unmodifiableSet(subscribe);
         }
         if (unsubscribe == null) {
-            this.unsubscribe = Collections.emptyList();
+            this.unsubscribe = Collections.emptySet();
         } else {
-            this.unsubscribe = unsubscribe;
+            this.unsubscribe = Collections.unmodifiableSet(unsubscribe);
         }
 
     }
@@ -37,11 +33,11 @@ public class InstrumentSubscriptionRequest {
         return token;
     }
 
-    public List<Instrument> getSubscribe() {
+    public Set<Instrument> getSubscribe() {
         return subscribe;
     }
 
-    public List<Instrument> getUnsubscribe() {
+    public Set<Instrument> getUnsubscribe() {
         return unsubscribe;
     }
 }
